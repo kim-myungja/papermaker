@@ -70,13 +70,64 @@ async function handleGenerate(request, env) {
     const data = await res.json();
     if (data.error) return json({ error: data.error.message }, 500);
 
-    // 응답에서 문구(JSON 글자)만 뽑아 방문자에게 그대로 전달
+    // 응답에서 문구(JSON 글자)만 뽑기
     const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text).join("");
-    return new Response(text, { headers: { "Content-Type": "application/json" } });
+
+    // AI가 규칙을 어기고 길게 써도 여기서 강제로 다듬음 (프롬프트만으론 안 지켜져서)
+    let out;
+    try { out = tidy(JSON.parse(text)); }
+    catch { return new Response(text, { headers: { "Content-Type": "application/json" } }); } // 파싱 실패 시 원본 그대로
+    return json(out, 200);
 
   } catch (err) {
     return json({ error: String(err) }, 500);
   }
+}
+
+// ===== AI 응답 다듬기: 전단지에서 줄이 넘치지 않게 강제로 길이 제한 =====
+const TITLE_MAX   = 14;  // 제목 (넘으면 전단지 제목이 두 줄로 깨짐)
+const SUB_MAX     = 20;  // 부제
+const PROFILE_MAX = 20;  // 프로필 한 줄
+const FEATURE_MAX = 22;  // 특징 한 줄
+
+// 프로필에 들어오면 안 되는 '자기 PR' 말투 — 이런 줄은 통째로 버림
+const PR_WORDS = /(경험|노하우|이해력|실력|열정|친구|재주|비결|마인드|자신감|능력|정성|마음)$/;
+
+function tidy(d) {
+  if (typeof d.title === "string")    d.title    = clamp(d.title, TITLE_MAX);
+  if (typeof d.subtitle === "string") d.subtitle = parens(clamp(d.subtitle, SUB_MAX));
+
+  if (Array.isArray(d.profile)) {
+    d.profile = d.profile
+      .map(s => clamp(String(s), PROFILE_MAX))
+      .filter(s => s && !PR_WORDS.test(s))  // 이력이 아니라 자기 자랑인 줄은 제거
+      .slice(0, 6);
+  }
+  if (Array.isArray(d.features)) {
+    d.features = d.features
+      .map(s => clamp(String(s), FEATURE_MAX))
+      .filter(Boolean)
+      .slice(0, 5);
+  }
+  return d;
+}
+
+// 부제는 항상 괄호로 감싸기 (AI가 빼먹어도 여기서 보정)
+function parens(s) {
+  if (!s) return s;
+  return /^\(.*\)$/.test(s) ? s : "(" + s.replace(/^[(]|[)]$/g, "") + ")";
+}
+
+// 문장 꼬리("~합니다.", "~해요!")를 떼고, 그래도 길면 단어 경계에서 자름
+function clamp(s, max) {
+  let t = s.trim().replace(/[.,!·]+$/, "");            // 끝의 마침표/느낌표 제거
+  t = t.replace(/(합니다|입니다|했습니다|드립니다)$/, ""); // 문장 어미 제거 → 이력서 톤으로
+  t = t.trim();
+  if (t.length <= max) return t;
+
+  const cut = t.slice(0, max + 1);
+  const sp  = cut.lastIndexOf(" ");                  // 단어 중간에서 안 끊기게
+  return (sp > max * 0.6 ? cut.slice(0, sp) : t.slice(0, max)).trim();
 }
 
 // 응답을 JSON으로 만들어주는 작은 도우미
