@@ -1,0 +1,230 @@
+<!-- 방문자 화면. 입력은 한 페이지, 완성 전단지는 팝업(모달)으로 뜸 -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"> <!-- 폰 반응형의 핵심 한 줄 -->
+<title>전단지 만들기</title>
+
+<!-- 전단지를 사진으로 찍어주는 외부 도구 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+  *{ box-sizing:border-box; }
+  /* 옛날 윈도우 청록 바탕 + 픽셀 느낌 폰트 */
+  body{ margin:0; background:#008080; color:#111; font-family:"Malgun Gothic","맑은 고딕",sans-serif; padding:16px; }
+
+  /* ===== 창(window) 틀: 밝은 위/왼쪽 + 어두운 아래/오른쪽 = 튀어나온 입체 ===== */
+  .window{ max-width:460px; margin:0 auto; background:#c0c0c0;
+           border:2px solid; border-color:#fff #808080 #808080 #fff; padding:3px; }
+  /* 창 제목줄: 파란 그라데이션 (옛날 윈도우 타이틀바) */
+  .titlebar{ background:linear-gradient(90deg,#000080,#1084d0); color:#fff;
+             padding:4px 8px; font-weight:bold; font-size:14px;
+             display:flex; justify-content:space-between; align-items:center; }
+  .titlebar .x{ background:#c0c0c0; color:#000; border:2px solid; border-color:#fff #808080 #808080 #fff;
+                width:22px; height:20px; line-height:1; font-weight:bold; cursor:pointer; }
+  .content{ padding:14px; }
+
+  /* 입력 묶음 상자 (옛날 그룹박스) */
+  fieldset{ border:2px groove #fff; margin:0 0 14px; padding:12px; }
+  legend{ font-size:12px; font-weight:bold; padding:0 4px; }
+
+  label{ display:block; font-size:13px; font-weight:bold; margin:14px 0 4px; }
+  label:first-child{ margin-top:0; }
+  .sub{ font-weight:400; color:#555; }
+  .hint{ font-size:11px; color:#444; margin:0 0 6px; line-height:1.5; }
+
+  /* ===== 입력창: 어두운 위/왼쪽 + 밝은 아래/오른쪽 = 움푹 들어간 입체(옛날 느낌) ===== */
+  input,textarea{ width:100%; padding:5px 7px; font-size:14px; font-family:inherit; background:#fff;
+                  border:2px solid; border-color:#808080 #fff #fff #808080; border-radius:0; }
+  textarea{ resize:vertical; min-height:64px; }
+  ::placeholder{ color:#999; }
+
+  /* ===== 버튼: 튀어나온 입체, 누르면 들어가는 효과 ===== */
+  button{ background:#c0c0c0; padding:7px 14px; font-size:14px; font-weight:bold; font-family:inherit;
+          border:2px solid; border-color:#fff #808080 #808080 #fff; border-radius:0; cursor:pointer; }
+  button:active{ border-color:#808080 #fff #fff #808080; } /* 누르면 입체 방향 반대로 */
+  .b-ai{ width:100%; margin-top:10px; }
+  .btns{ display:flex; gap:8px; margin-top:16px; }
+  .btns button{ flex:1; }
+
+  /* ===== 팝업(모달) ===== */
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:10;
+            display:none; align-items:flex-start; justify-content:center; padding:16px; overflow:auto; }
+  .overlay.on{ display:flex; } /* 'on' 클래스 붙으면 보임 */
+  .modal{ background:#c0c0c0; border:2px solid; border-color:#fff #808080 #808080 #fff;
+          padding:3px; max-width:480px; width:100%; }
+  .modal .content{ padding:10px; }
+
+  /* ===== 전단지 자체: 명조 + 흑백 + ¶ 불릿 (결과물은 그대로 유지) ===== */
+  #flyer{ background:#fff; padding:26px 22px; border:1px solid #999;
+          font-family:Batang,"Nanum Myeongjo","바탕",serif; color:#111; }
+  #flyer .title{ text-align:center; font-size:24px; font-weight:800; letter-spacing:1px; }
+  #flyer .subtitle{ text-align:center; font-size:13px; margin-top:5px; }
+  #flyer .features{ font-size:14px; line-height:1.9; margin-top:16px; }
+  #flyer .pname{ font-weight:800; font-size:15px; margin-top:20px; }
+  #flyer .row{ display:flex; gap:14px; margin-top:6px; align-items:flex-start; }
+  #flyer .profile{ flex:1; font-size:12.5px; line-height:1.75; white-space:pre-line; }
+  #flyer .photo{ width:120px; height:145px; object-fit:cover; flex-shrink:0; background:#eee; }
+  #flyer .intro{ font-size:13px; line-height:1.85; white-space:pre-line; margin-top:20px; text-align:justify; }
+  #flyer .name{ text-align:center; font-size:15px; font-weight:700; margin-top:18px; }
+  #flyer .contact{ text-align:center; font-size:16px; font-weight:700; margin-top:4px; }
+</style>
+
+<!-- ===== 입력 페이지 (창 하나) ===== -->
+<div class="window">
+  <div class="titlebar"><span>전단지 만들기</span></div>
+  <div class="content">
+
+    <fieldset>
+      <legend>AI 문구 만들기</legend>
+      <p class="hint">키워드만 툭툭. 예) 영어과외 원어민 월10만 매일40분 초등중등성인 무료체험</p>
+      <textarea id="f-raw" placeholder="영어과외 원어민 월10만원 매일40분 초등중등성인 무료체험 카톡상담"></textarea>
+      <button class="b-ai" id="b-ai" onclick="aiGenerate()">AI로 문구 만들기</button>
+    </fieldset>
+
+    <label>제목</label>
+    <input id="f-title" oninput="draw()" placeholder="필리핀 원어민 온라인 영어">
+
+    <label>부제 (누구 대상?)</label>
+    <input id="f-subtitle" oninput="draw()" placeholder="(초등, 중등, 성인 모집)">
+
+    <label>특징 / 강점 <span class="sub">(한 줄에 하나)</span></label>
+    <textarea id="f-features" oninput="draw()" placeholder="주 5회 월 10만원 (매일 40분)
+무료 체험수업 가능"></textarea>
+
+    <label>프로필 / 이력 <span class="sub">(한 줄에 하나)</span></label>
+    <textarea id="f-profile" oninput="draw()" placeholder="미국 Bethesda University
+현 제이영어학원 원장"></textarea>
+
+    <label>소개 문구</label>
+    <textarea id="f-intro" oninput="draw()" placeholder="1:1 맞춤식으로 기초부터 가르쳐 드립니다."></textarea>
+
+    <label>이름</label>
+    <input id="f-name" oninput="draw()" placeholder="Jay Song">
+
+    <label>연락처</label>
+    <input id="f-contact" oninput="draw()" placeholder="상담문의: 010-0000-0000">
+
+    <label>사진</label>
+    <input type="file" id="f-photo" accept="image/*" onchange="loadPhoto(event)">
+
+    <div class="btns">
+      <button onclick="fillExample()">예시 채우기</button>
+      <button onclick="openPreview()">전단지 미리보기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 팝업(모달): 평소엔 숨어있다가 미리보기 누르면 뜸 ===== -->
+<div class="overlay" id="overlay" onclick="bgClose(event)">
+  <div class="modal">
+    <div class="titlebar"><span>전단지 미리보기</span><button class="x" onclick="closePreview()">✕</button></div>
+    <div class="content">
+      <!-- 전단지 본체 -->
+      <div id="flyer">
+        <div class="title" id="v-title"></div>
+        <div class="subtitle" id="v-subtitle"></div>
+        <div class="features" id="v-features"></div>
+        <div class="pname" id="v-pname"></div>
+        <div class="row">
+          <div class="profile" id="v-profile"></div>
+          <img class="photo" id="v-photo" alt="">
+        </div>
+        <div class="intro" id="v-intro"></div>
+        <div class="name" id="v-name"></div>
+        <div class="contact" id="v-contact"></div>
+      </div>
+      <button style="width:100%;margin-top:10px" onclick="savePng()">이미지로 저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== 도우미 =====
+  function get(id){ return document.getElementById(id).value; }        // 값 꺼내기
+  function set(id,val){ document.getElementById(id).value = val; }     // 값 넣기
+  function esc(s){ return s.replace(/</g,"&lt;").replace(/>/g,"&gt;"); } // 특수기호로 화면 깨짐 방지
+
+  // draw(): 입력값 → 전단지(숨겨진 상태여도)에 채워둠. 미리보기 열면 최신 상태로 보임
+  function draw(){
+    document.getElementById("v-title").textContent    = get("f-title");
+    document.getElementById("v-subtitle").textContent = get("f-subtitle");
+    const feats = get("f-features").split("\n").filter(l=>l.trim()); // 빈 줄 제외
+    document.getElementById("v-features").innerHTML = feats.map(l => "¶ " + esc(l)).join("<br>"); // 줄마다 ¶
+    const name = get("f-name") || "이름";
+    document.getElementById("v-pname").textContent   = name + " 프로필";
+    document.getElementById("v-profile").textContent = get("f-profile");
+    document.getElementById("v-intro").textContent   = get("f-intro");
+    document.getElementById("v-name").textContent    = name;
+    document.getElementById("v-contact").textContent = get("f-contact");
+  }
+
+  // 팝업 열고 닫기
+  function openPreview(){ draw(); document.getElementById("overlay").classList.add("on"); } // 열기 전 최신화
+  function closePreview(){ document.getElementById("overlay").classList.remove("on"); }
+  function bgClose(e){ if(e.target.id === "overlay") closePreview(); } // 검은 배경 누르면 닫기
+
+  // loadPhoto(): 고른 사진을 미리보기에 넣기
+  function loadPhoto(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { document.getElementById("v-photo").src = reader.result; };
+    reader.readAsDataURL(file);
+  }
+
+  // ===== AI 문구 생성: 우리 서버함수한테만 부탁 (키는 서버에 숨김) =====
+  async function aiGenerate(){
+    const raw = get("f-raw").trim();
+    if(!raw){ alert("대충이라도 키워드 적어줘. 예) 영어과외 월10만 원어민"); return; }
+    const btn = document.getElementById("b-ai");
+    btn.textContent = "AI가 문구 만드는 중...";
+    btn.disabled = true;
+    try{
+      const res = await fetch("/generate", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ raw })
+      });
+      const d = await res.json();
+      if(d.error){ alert("오류: " + d.error); return; }
+      if(d.title)    set("f-title", d.title);
+      if(d.subtitle) set("f-subtitle", d.subtitle);
+      if(d.features) set("f-features", d.features.join("\n"));
+      if(d.profile)  set("f-profile",  d.profile.join("\n"));
+      if(d.intro)    set("f-intro", d.intro);
+      if(d.name)     set("f-name", d.name);
+      if(d.contact)  set("f-contact", d.contact);
+      draw();
+      openPreview(); // 문구 나오면 바로 미리보기 팝업 띄우기
+    }catch(err){
+      alert("문구 생성 실패. 잠깐 뒤 다시 시도해줘.");
+      console.error(err);
+    }finally{
+      btn.textContent = "AI로 문구 만들기";
+      btn.disabled = false;
+    }
+  }
+
+  // fillExample(): 완성 예시 채우기 (AI 없이도 됨)
+  function fillExample(){
+    set("f-title","필리핀 원어민 온라인 영어");
+    set("f-subtitle","(초등, 중등, 성인 모집)");
+    set("f-features","주 5회 월 10만원 (매일 40분)\n학생이 원하는 시간대 수강 가능\n교재 이메일로 보내줌\n무료 체험수업 가능\n핸드폰으로도 수업 가능(팀즈, 보이스톡)");
+    set("f-profile","미국 Libertyville High School\nBethesda University\n시카고 대한항공 영어통역사\n현 제이영어학원 원장(군포)");
+    set("f-intro","재미교포 Jay 선생님이 1:1 맞춤식으로 기초부터 가르쳐 드립니다. 무료 체험 수업과 함께 친절하게 상담해 드리겠습니다.");
+    set("f-name","Jay Song");
+    set("f-contact","상담문의: 010-0000-0000");
+    draw();
+  }
+
+  // savePng(): 전단지를 사진으로 찍어 다운로드
+  function savePng(){
+    html2canvas(document.getElementById("flyer"), { scale:2 }).then(canvas => {
+      const link = document.createElement("a");
+      link.download = "전단지.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+  }
+
+  draw(); // 처음 한 번 그려두기
+</script>
